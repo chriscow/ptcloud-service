@@ -1,0 +1,10 @@
+steps:
+- name: proxy
+args: ['go', 'build', '.']
+env:
+    - "GOARCH=amd64"
+    - "GOOS=windows"
+    
+artifacts:
+    objects:
+        location: 'gs://mybucket/some/folder/version'
