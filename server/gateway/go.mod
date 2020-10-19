@@ -1,13 +1,17 @@
-module strucim/locator
+module strucim/gateway
 
 go 1.15
 
 require (
-	cloud.google.com/go/pubsub v1.8.1
-	cloud.google.com/go/storage v1.12.0
-	github.com/gorilla/mux v1.8.0
+	cloud.google.com/go/pubsub v1.3.1
+	cloud.google.com/go/storage v1.10.0
+	github.com/gofrs/uuid v3.3.0+incompatible
+	github.com/googleapis/gax-go v1.0.3 // indirect
+	github.com/gorilla/websocket v1.4.2
+	github.com/iris-contrib/middleware/jwt v0.0.0-20201017024110-39b50ffeb885
 	github.com/joho/godotenv v1.3.0
-	github.com/kataras/iris-cli v0.0.0-20200917235228-c56f09df0592 // indirect
-	github.com/kataras/iris/v12 v12.2.0-alpha.0.20201016065322-b816156e7778
-	google.golang.org/api v0.32.0
+	github.com/kataras/iris v0.0.2
+	github.com/kataras/iris/v12 v12.2.0-alpha.0.20201018152601-b335ab9c78d2
+	go.opencensus.io v0.22.5 // indirect
+	google.golang.org/api v0.33.0
 )
