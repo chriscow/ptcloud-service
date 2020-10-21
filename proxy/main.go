@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"proxy/commands"
+	"strucim/proxy/commands"
 
 	"github.com/joho/godotenv"
 	"github.com/urfave/cli/v2"

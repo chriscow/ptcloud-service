@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"os"
 
+	"github.com/gorilla/handlers"
+
 	"github.com/gorilla/mux"
 
 	"github.com/joho/godotenv"
@@ -19,8 +21,15 @@ func main() {
 	godotenv.Load()
 	r := mux.NewRouter()
 
-	r.HandleFunc("/v1/identify", uploadHandler).
+	handler := http.HandlerFunc(uploadHandler)
+	logger := handlers.CombinedLoggingHandler(os.Stdout, handler)
+
+	path := "/v1/identify"
+	r.HandleFunc(path, logger.ServeHTTP).
 		Methods("POST")
+
+	r.HandleFunc(path, wsHandler).
+		Methods("GET")
 
 	log.Fatal(http.ListenAndServe(os.Getenv("GATEWAY_ENDPOINT"), r))
 }

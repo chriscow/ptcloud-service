@@ -9,19 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"strucim/gateway/messages"
 	"time"
 )
-
-type idRequest struct {
-	File string `json:"file"`
-}
-
-type idResponse struct {
-	Bucket   string `json:"bucket"`
-	Filename string `json:"filename"`
-	Status   string `json:"status"`
-	Result   string `json:"result"`
-}
 
 func writeError(w http.ResponseWriter, status int, msg string, err error) {
 	w.WriteHeader(status)
@@ -31,7 +21,7 @@ func writeError(w http.ResponseWriter, status int, msg string, err error) {
 
 func uploadHandler(w http.ResponseWriter, r *http.Request) {
 
-	req := idRequest{}
+	req := messages.IdentifyRequest{}
 	body, _ := ioutil.ReadAll(r.Body)
 
 	if err := json.Unmarshal(body, &req); err != nil {
@@ -54,7 +44,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	msg := idResponse{
+	msg := messages.IdentifyResponse{
 		Bucket:   bucket,
 		Filename: filename,
 		Status:   "init",
@@ -71,7 +61,7 @@ func uploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Write(msgJSON)
+	fmt.Fprint(w, "OK")
 }
 
 // ServerEvents returns a websocket handler

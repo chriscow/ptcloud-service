@@ -9,19 +9,10 @@ import (
 	"net/http"
 	"os"
 
+	"strucim/proxy/messages"
+
 	"github.com/urfave/cli/v2"
 )
-
-type idRequest struct {
-	File string `json:"file"`
-}
-
-type idResponse struct {
-	Bucket   string `json:"bucket"`
-	Filename string `json:"filename"`
-	Status   string `json:"status"`
-	Result   string `json:"result"`
-}
 
 // Identify reads in the file given as an argument.
 func Identify(ctx *cli.Context) error {
@@ -36,7 +27,7 @@ func Identify(ctx *cli.Context) error {
 
 	encoded, _ := encodeFile(filename, endpoint, url)
 
-	req, err := json.Marshal(&idRequest{File: encoded})
+	req, err := json.Marshal(&messages.IdentifyRequest{File: encoded})
 	if err != nil {
 		return cli.Exit(err.Error(), -1)
 	}
@@ -46,15 +37,9 @@ func Identify(ctx *cli.Context) error {
 		return cli.Exit(err.Error(), -1)
 	}
 
-	body, _ := ioutil.ReadAll(resp.Body)
-
 	if resp.StatusCode != 200 {
+		body, _ := ioutil.ReadAll(resp.Body)
 		return fmt.Errorf("Server return an error: %s", string(body))
-	}
-
-	respJSON := idResponse{}
-	if err := json.Unmarshal(body, &respJSON); err != nil {
-		return fmt.Errorf("Failed to decode response body: %v", err)
 	}
 
 	return nil
