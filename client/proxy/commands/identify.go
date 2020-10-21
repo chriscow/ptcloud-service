@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"io"
 	"io/ioutil"
 	"net/http"
 	"os"
@@ -29,9 +28,10 @@ func Identify(ctx *cli.Context) error {
 	endpoint := os.Getenv("LOCATOR_ENDPOINT")
 	url := fmt.Sprintf("http://%s/v1/identify", endpoint)
 
-	req, _ := newUploadRequest(filename, endpoint, url)
+	encoded, _ := encodeFile(filename, endpoint, url)
 
-	resp, _ := http.Post(url, "application/json", req)
+	body, _ := json.Marshal(&identifyRequest{File: encoded})
+	resp, _ := http.Post(url, "application/json", bytes.NewReader(body))
 
 	if resp.StatusCode != 200 {
 		body, _ := ioutil.ReadAll(resp.Body)
@@ -61,23 +61,12 @@ func validateArgs(ctx *cli.Context) error {
 	return nil
 }
 
-func newUploadRequest(filename, endpoint, uri string) (io.Reader, error) {
+func encodeFile(filename, endpoint, uri string) (string, error) {
 
-	file, err := ioutil.ReadFile(filename)
+	csv, err := ioutil.ReadFile(filename)
 	if err != nil {
-		return nil, fmt.Errorf("Failed to read file: %v", err)
+		return "", fmt.Errorf("Failed to read file: %v", err)
 	}
 
-	encoded := base64.StdEncoding.EncodeToString(file)
-
-	req := &identifyRequest{
-		File: encoded,
-	}
-
-	b, err := json.Marshal(req)
-	if err != nil {
-		return nil, err
-	}
-
-	return bytes.NewReader(b), nil
+	return base64.StdEncoding.EncodeToString(csv), nil
 }

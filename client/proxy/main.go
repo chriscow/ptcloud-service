@@ -10,7 +10,7 @@ import (
 	"github.com/urfave/cli/v2"
 )
 
-func main() {
+func mainOrig() {
 
 	if err := godotenv.Load(); err != nil {
 		log.Fatal("Error loading .env file", err)
