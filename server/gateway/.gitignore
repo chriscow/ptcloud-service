@@ -1,7 +1,0 @@
-.env
-.secrets
-.vscode
-
-*.log
-
-gateway*
