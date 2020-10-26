@@ -1,4 +1,4 @@
-package main
+package gateway
 
 import (
 	"fmt"
@@ -7,7 +7,7 @@ import (
 	"github.com/gorilla/websocket"
 )
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
+func WSHandler(w http.ResponseWriter, r *http.Request) {
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,

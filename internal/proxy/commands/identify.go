@@ -9,7 +9,7 @@ import (
 	"net/http"
 	"os"
 
-	"strucim/proxy/messages"
+	"github.com/chriscow/strucim/internal/messages"
 
 	"github.com/urfave/cli/v2"
 )

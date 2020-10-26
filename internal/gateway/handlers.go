@@ -1,4 +1,4 @@
-package main
+package gateway
 
 import (
 	"bytes"
@@ -9,8 +9,9 @@ import (
 	"log"
 	"net/http"
 	"os"
-	"strucim/gateway/messages"
 	"time"
+
+	"github.com/chriscow/strucim/internal/messages"
 )
 
 func writeError(w http.ResponseWriter, status int, msg string, err error) {
@@ -19,7 +20,7 @@ func writeError(w http.ResponseWriter, status int, msg string, err error) {
 	fmt.Fprintf(w, "%s: %v", msg, err)
 }
 
-func uploadHandler(w http.ResponseWriter, r *http.Request) {
+func UploadHandler(w http.ResponseWriter, r *http.Request) {
 
 	req := messages.IdentifyRequest{}
 	body, _ := ioutil.ReadAll(r.Body)
