@@ -1,8 +1,12 @@
 package messages
 
 type WSEvent struct {
-	Name    string `json:"name"`
-	Message string `json:"message"`
+	MsgType string `json:"msgtype"`
+	Message []byte `json:"message"`
+}
+
+type WSHeartbeat struct {
+	Timestamp string `json:"timestamp"`
 }
 
 type IdentifyRequest struct {
