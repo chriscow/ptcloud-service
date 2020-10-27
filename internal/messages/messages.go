@@ -5,10 +5,6 @@ type WSEvent struct {
 	Message []byte `json:"message"`
 }
 
-type WSHeartbeat struct {
-	Timestamp string `json:"timestamp"`
-}
-
 type IdentifyRequest struct {
 	File string `json:"file"`
 }

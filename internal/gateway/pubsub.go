@@ -2,7 +2,6 @@ package gateway
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -13,7 +12,7 @@ import (
 )
 
 // Publish publishes a message
-func publish(topicID string, message []byte) error {
+func Publish(topicID string, message []byte) error {
 
 	ctx := context.Background()
 
@@ -38,11 +37,11 @@ func publish(topicID string, message []byte) error {
 }
 
 // SubscribeCallback ....
-type subscribeHandler func(ctx context.Context, msg *pubsub.Message) (bool, error)
+type SubscribeHandler func(ctx context.Context, msg *pubsub.Message) (bool, error)
 
 // Subscribe ...
-func subscribe(topicID string, handler subscribeHandler) error {
-	ctx := context.Background()
+func Subscribe(ctx context.Context, cancel context.CancelFunc, subscription string, topicID string, handler SubscribeHandler) error {
+	log.Println("[pubsub::subscribe] called")
 
 	client, err := getClient(ctx)
 	if err != nil {
@@ -54,25 +53,31 @@ func subscribe(topicID string, handler subscribeHandler) error {
 		return err
 	}
 
-	sub, err := client.createSubscription("strucim", topic)
+	sub, err := client.createSubscription(subscription, topic)
 	if err != nil {
 		return err
 	}
 
-	cctx, cancel := context.WithCancel(ctx)
-
+	log.Println("[pubsub::subscribe] Starting receive")
 	var mu sync.Mutex
-	err = sub.Receive(cctx, func(ctx context.Context, msg *pubsub.Message) {
-		fmt.Printf("[pubsub.go] Got message: %q\n", string(msg.Data))
+	err = sub.Receive(ctx, func(ctx context.Context, msg *pubsub.Message) {
+		log.Println("[pubsub.go] Got message:", string(msg.Data))
 
 		mu.Lock()
 		defer mu.Unlock()
 
 		ok, err := handler(ctx, msg)
 		if err != nil || !ok {
+			log.Println("[pubsub] cancelling receive")
 			cancel()
 		}
 	})
+
+	if err != nil {
+		log.Println("sub.Receive returned an error:", err)
+	}
+
+	log.Println("[pubsub::subscribe] Exiting subscribe")
 
 	return err
 }

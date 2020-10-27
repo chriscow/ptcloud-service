@@ -57,68 +57,17 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := publish(os.Getenv("IDENTIFY_POINTCLOUD_TOPIC"), msgJSON); err != nil {
+	log.Println("publishing status json to ", os.Getenv("IDENTIFY_POINTCLOUD_STATUS_TOPIC"))
+	if err := Publish(os.Getenv("IDENTIFY_POINTCLOUD_STATUS_TOPIC"), msgJSON); err != nil {
+		writeError(w, 500, "Failed to publish identify job", err)
+		return
+	}
+
+	log.Println("publishing json to ", os.Getenv("IDENTIFY_POINTCLOUD_TOPIC"))
+	if err := Publish(os.Getenv("IDENTIFY_POINTCLOUD_TOPIC"), msgJSON); err != nil {
 		writeError(w, 500, "Failed to publish identify job", err)
 		return
 	}
 
 	fmt.Fprint(w, "OK")
 }
-
-// ServerEvents returns a websocket handler
-// var ServerEvents = websocket.Namespaces{
-
-// 	"identify.v1": websocket.Events{
-
-// 		websocket.OnNamespaceConnected: func(nsConn *websocket.NSConn, msg websocket.Message) error {
-// 			// get the Iris' `Context`.
-// 			ctx := websocket.GetContext(nsConn.Conn)
-// 			log.Printf("[%s] connected to namespace [%s] with IP [%s]",
-// 				nsConn, msg.Namespace, ctx.RemoteAddr())
-
-// 			return nil
-// 		},
-
-// 		websocket.OnNamespaceDisconnect: func(nsConn *websocket.NSConn, msg websocket.Message) error {
-// 			log.Printf("[%s] disconnected from namespace [%s]", nsConn, msg.Namespace)
-// 			count := nsConn.Conn.Server().GetTotalConnections()
-// 			fmt.Println("total connections:", count)
-// 			return nil
-// 		},
-
-// 		"publish": func(nsConn *websocket.NSConn, msg websocket.Message) error {
-// 			topic := msg.Namespace
-
-// 			google.Publish(topic, msg.Body)
-// 			log.Printf("[%s] publish to topic %q msg:%s", nsConn, topic, msg.Body)
-
-// 			nsConn.Emit("publish", msg.Body)
-// 			return nil
-// 		},
-
-// 		"subscribe": func(nsConn *websocket.NSConn, msg websocket.Message) error {
-// 			topic := msg.Namespace
-
-// 			log.Printf("[%s] subscribing to topic %q", nsConn, topic)
-
-// 			err := google.Subscribe(topic, func(ctx context.Context, msg *pubsub.Message) (bool, error) {
-// 				ok := true
-// 				log.Printf("[%s] topic %q received message %s", nsConn, topic, string(msg.Data))
-
-// 				wsmsg := websocket.Message{Namespace: topic, Event: topic, Body: msg.Data}
-// 				nsConn.Conn.Server().Broadcast(nil, wsmsg)
-// 				msg.Ack()
-// 				return ok, nil
-// 			})
-
-// 			if err != nil {
-// 				nsConn.Emit("error", []byte(err.Error()))
-// 				return err
-// 			}
-
-// 			nsConn.Emit("subscribe", []byte("subscribed"))
-
-// 			return nil
-// 		},
-// 	},
-// }

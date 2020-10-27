@@ -1,16 +1,17 @@
 package gateway
 
 import (
-	"encoding/json"
+	"context"
 	"log"
 	"net/http"
+	"strings"
 
-	"github.com/chriscow/strucim/internal/messages"
-
+	"cloud.google.com/go/pubsub"
 	"github.com/gorilla/websocket"
 )
 
 func WSHandler(w http.ResponseWriter, r *http.Request) {
+
 	log.Println("[WSHandler] called")
 	upgrader := websocket.Upgrader{
 		ReadBufferSize:  1024,
@@ -20,8 +21,6 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	log.Println("[WSHandler] upgrading...")
-
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		writeError(w, 500, "Failed to upgrade websocket", err)
@@ -29,34 +28,57 @@ func WSHandler(w http.ResponseWriter, r *http.Request) {
 	}
 	defer conn.Close()
 
-	log.Println("[WSHandler] read loop starting")
+	// conn.SetPingHandler(func(appData string) error {
+	// 	log.Println("[ping]", appData)
+	// 	return nil
+	// })
+	// conn.SetPongHandler(func(appData string) error {
+	// 	log.Println("[pong]", appData)
+	// 	return nil
+	// })
+
+	ctx, cancel := context.WithCancel(context.Background())
 
 	for {
 
 		_, b, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("ReadMessage error:", err)
-			break
-		}
 
-		msg := &messages.WSEvent{}
-		if err := json.Unmarshal(b, &msg); err != nil {
-			log.Println("Failed to unmarshal message")
-			break
-		}
-
-		switch msg.MsgType {
-		case "WSHeartbeat":
-			heartbeat := &messages.WSHeartbeat{}
-			if err := json.Unmarshal(msg.Message, &heartbeat); err != nil {
-				log.Println("Failed to unmarshal heartbeat")
-				break
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+				log.Println("client closed")
+				cancel()
+				return
 			}
+
+			log.Println("ReadMessage error:", err)
+			cancel()
+			return
 		}
 
-		// if err := conn.WriteMessage(msgType, msg); err != nil {
-		// 	log.Println("WriteMessage error:", err)
-		// 	break
-		// }
+		tokens := strings.Split(string(b), ":")
+		if len(tokens) != 2 {
+			conn.WriteMessage(websocket.TextMessage, []byte("Bad command"))
+			cancel()
+			return
+		}
+
+		command, param := tokens[0], tokens[1]
+
+		switch command {
+		case "subscribe":
+			go Subscribe(ctx, cancel, "gateway", param, func(ctx context.Context, msg *pubsub.Message) (bool, error) {
+				log.Println("Received message from pubsub")
+				err := conn.WriteMessage(websocket.BinaryMessage, msg.Data)
+				msg.Ack()
+				return true, err
+			})
+			log.Println("Received subscribe:", param)
+			break
+		case "unsubscribe":
+			log.Println("Received unsubscribe:", param)
+			cancel()
+			conn.WriteMessage(websocket.TextMessage, []byte("unsubscribe:OK"))
+			break
+		}
 	}
 }

@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"strings"
 	"time"
 
 	"github.com/chriscow/strucim/internal/messages"
@@ -26,13 +27,23 @@ func Identify(ctx *cli.Context) error {
 		return err
 	}
 
+	// connect the websocket for notification when identification is complete
 	c, err := connect()
 	if err != nil {
 		return err
 	}
 	defer c.Close()
 
-	done, err := status(c)
+	c.SetPingHandler(func(appData string) error {
+		log.Println("[ping]", appData)
+		return nil
+	})
+	c.SetPongHandler(func(appData string) error {
+		log.Println("[pong]", appData)
+		return nil
+	})
+
+	rc, err := status(c)
 	if err != nil {
 		return err
 	}
@@ -58,12 +69,16 @@ func Identify(ctx *cli.Context) error {
 		return fmt.Errorf("Server return an error: %s", string(body))
 	}
 
-	log.Printf("waiting for done channel")
-	result := <-done
+	log.Printf("[Identify] waiting for result channel")
+	result, ok := <-rc
+	if !ok {
+		// channel got closed
+		log.Fatal("[Identify] result channel got closed")
+	}
 
 	fmt.Println(result)
 
-	return nil
+	return wsClose(c, nil)
 }
 
 func validateArgs(ctx *cli.Context) error {
@@ -97,100 +112,93 @@ func connect() (*websocket.Conn, error) {
 	u := url.URL{Scheme: "ws", Host: os.Getenv("LOCATOR_ENDPOINT"), Path: "/v1/identify"}
 
 	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	if err != nil {
-		log.Fatal("dial:", err)
-		return nil, err
-	}
-
-	return c, nil
+	return c, err
 }
 
 func status(c *websocket.Conn) (<-chan string, error) {
 
+	result := make(chan string)
+
+	go readPump(c, result)
+
+	// write a heartbeat ping every second while we wait for results
+	go heartbeat(c, result)
+
+	return result, subscribe(c)
+}
+
+func subscribe(c *websocket.Conn) error {
+	topic := os.Getenv("IDENTIFY_POINTCLOUD_STATUS_TOPIC")
+	log.Println("Sending subscribe request for", topic)
+	msg := strings.Join([]string{"subscribe", topic}, ":")
+
+	return c.WriteMessage(websocket.TextMessage, []byte(msg))
+}
+
+func readPump(c *websocket.Conn, result chan string) error {
+	for {
+		log.Println("Wating for ReadMessage...")
+		_, message, err := c.ReadMessage()
+		if err != nil {
+
+			log.Println("closing result channel")
+			close(result)
+
+			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+				return nil
+			}
+
+			return fmt.Errorf("[readPump] read error: %v", err)
+		}
+
+		result <- string(message)
+	}
+}
+
+func heartbeat(c *websocket.Conn, done chan string) error {
 	interrupt := make(chan os.Signal, 1)
 	signal.Notify(interrupt, os.Interrupt)
 
-	result := make(chan string)
-	done := make(chan struct{})
-
-	go func() {
-		defer close(done)
-		for {
-			log.Println("Wating for ReadMessage...")
-			_, message, err := c.ReadMessage()
+	ticker := time.NewTicker(time.Second * 5)
+	defer ticker.Stop()
+	for {
+		select {
+		case t := <-ticker.C:
+			err := c.WriteMessage(websocket.PingMessage, []byte(t.String()))
 			if err != nil {
-				log.Println("read:", err)
-				return
+				return fmt.Errorf("[wsHeartbeat] Error writing heartbeat: %v", err)
 			}
-			log.Printf("recv: %s", message)
-			result <- string(message)
-		}
-	}()
 
-	ticker := time.NewTicker(time.Second)
-
-	// heartbeat
-	go func() {
-		defer ticker.Stop()
-		for {
-			select {
-			case t := <-ticker.C:
-				log.Println("Writing time heartbeat at ", t)
-
-				hb, err := json.Marshal(&messages.WSHeartbeat{Timestamp: t.String()})
-				if err != nil {
-					result <- fmt.Sprintf("failed to marshal heartbeat message: %v", err)
-					return
-				}
-
-				b, err := json.Marshal(&messages.WSEvent{
-					MsgType: "WSHeartbeat",
-					Message: hb,
-				})
-				if err != nil {
-					result <- fmt.Sprintf("Failed to marshal heartbeat message envelope: %v", err)
-					return
-				}
-
-				err = c.WriteMessage(websocket.BinaryMessage, b)
-				if err != nil {
-					result <- fmt.Sprintf("Received error on WriteMessage: %v", err)
-					return
-				}
-			case <-interrupt:
-				defer close(done)
-				defer close(result)
-				log.Println("interrupt")
-				if err := wsClose(c, done); err != nil {
-					log.Printf("Received error from wsClose: %v", err)
-					return
-				}
+		case <-interrupt:
+			log.Println("interrupt")
+			if err := wsClose(c, done); err != nil {
+				return fmt.Errorf("[interrupt] Received error from wsClose: %v", err)
 			}
 		}
-	}()
-
-	return result, nil
+	}
 }
 
-func wsClose(c *websocket.Conn, done chan struct{}) error {
-	log.Printf("[wsClose] called")
-
+func wsClose(c *websocket.Conn, done chan string) error {
 	// Cleanly close the connection by sending a close message and then
 	// waiting (with timeout) for the server to close the connection
 	err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
 	if err != nil {
-		log.Printf("[wsClose] error writing: %v", err)
+		if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
+			log.Println("normal close")
+			return nil
+		}
+
 		return err
 	}
 
-	log.Printf("[wsClose] waiting for done or time.Second")
+	log.Println("waiting for done to close or timeout")
 
 	select {
 	case <-done: // wait for the read goroutine to exit
 	case <-time.After(time.Second): // or timeout after a second
 	}
 
-	log.Printf("[wsClose] done")
+	log.Println("closed")
 
 	return nil
 }
