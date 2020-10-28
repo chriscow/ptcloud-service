@@ -1,14 +1,11 @@
 package main
 
 import (
-	"context"
 	"errors"
 	"log"
 	"net/http"
 	"os"
-	"sync"
 
-	"cloud.google.com/go/pubsub"
 	"github.com/chriscow/strucim/internal/gateway"
 
 	"github.com/gorilla/handlers"
@@ -16,26 +13,16 @@ import (
 	"github.com/joho/godotenv"
 )
 
+/*
+	TODO:
+	File upload service
+	Inference service
+	Notification service
+*/
+
 type dashboard struct {
 	Title string
 	Host  string
-}
-
-func mainTest() {
-	godotenv.Load()
-
-	ctx, cancel := context.WithCancel(context.Background())
-
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go gateway.Subscribe(ctx, cancel, "gateway", "identify-status", func(ctx context.Context, msg *pubsub.Message) (bool, error) {
-		log.Println(string(msg.Data))
-		msg.Ack()
-		wg.Done()
-		return true, nil
-	})
-
-	wg.Wait()
 }
 
 func main() {
@@ -54,7 +41,7 @@ func main() {
 	r.HandleFunc(path, logger.ServeHTTP).
 		Methods("POST")
 
-	r.HandleFunc(path, gateway.WSHandler).
+	r.HandleFunc(path, gateway.NotifyHandler).
 		Methods("GET")
 
 	log.Fatal(http.ListenAndServe(os.Getenv("GATEWAY_ENDPOINT"), r))

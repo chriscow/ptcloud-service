@@ -8,14 +8,10 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
-	"net/url"
 	"os"
-	"os/signal"
-	"strings"
-	"time"
 
 	"github.com/chriscow/strucim/internal/messages"
-	"github.com/gorilla/websocket"
+	"github.com/chriscow/strucim/internal/services/notification"
 
 	"github.com/urfave/cli/v2"
 )
@@ -27,30 +23,17 @@ func Identify(ctx *cli.Context) error {
 		return err
 	}
 
-	// connect the websocket for notification when identification is complete
-	c, err := connect()
-	if err != nil {
-		return err
-	}
-	defer c.Close()
-
-	c.SetPingHandler(func(appData string) error {
-		log.Println("[ping]", appData)
-		return nil
-	})
-	c.SetPongHandler(func(appData string) error {
-		log.Println("[pong]", appData)
-		return nil
-	})
-
-	rc, err := status(c)
-	if err != nil {
-		return err
-	}
-
 	filename := ctx.Args().Get(0)
 	endpoint := os.Getenv("LOCATOR_ENDPOINT")
 	url := fmt.Sprintf("http://%s/v1/identify", endpoint)
+
+	nc := &notification.Client{}
+	if err := nc.Connect(endpoint, "/v1/identify", "identify-status"); err != nil {
+		return err
+	}
+	defer nc.Close()
+
+	nc.Subscribe(os.Getenv("IDENTIFY_POINTCLOUD_STATUS_TOPIC"))
 
 	encoded, _ := encodeFile(filename, endpoint, url)
 
@@ -70,15 +53,14 @@ func Identify(ctx *cli.Context) error {
 	}
 
 	log.Printf("[Identify] waiting for result channel")
-	result, ok := <-rc
+	msg, ok := <-nc.Messages
 	if !ok {
 		// channel got closed
 		log.Fatal("[Identify] result channel got closed")
 	}
 
-	fmt.Println(result)
-
-	return wsClose(c, nil)
+	fmt.Println(string(msg))
+	return nil
 }
 
 func validateArgs(ctx *cli.Context) error {
@@ -101,104 +83,4 @@ func encodeFile(filename, endpoint, uri string) (string, error) {
 	}
 
 	return base64.StdEncoding.EncodeToString(csv), nil
-}
-
-type statusResult struct {
-	Result string
-	Err    error
-}
-
-func connect() (*websocket.Conn, error) {
-	u := url.URL{Scheme: "ws", Host: os.Getenv("LOCATOR_ENDPOINT"), Path: "/v1/identify"}
-
-	c, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
-	return c, err
-}
-
-func status(c *websocket.Conn) (<-chan string, error) {
-
-	result := make(chan string)
-
-	go readPump(c, result)
-
-	// write a heartbeat ping every second while we wait for results
-	go heartbeat(c, result)
-
-	return result, subscribe(c)
-}
-
-func subscribe(c *websocket.Conn) error {
-	topic := os.Getenv("IDENTIFY_POINTCLOUD_STATUS_TOPIC")
-	log.Println("Sending subscribe request for", topic)
-	msg := strings.Join([]string{"subscribe", topic}, ":")
-
-	return c.WriteMessage(websocket.TextMessage, []byte(msg))
-}
-
-func readPump(c *websocket.Conn, result chan string) error {
-	for {
-		log.Println("Wating for ReadMessage...")
-		_, message, err := c.ReadMessage()
-		if err != nil {
-
-			log.Println("closing result channel")
-			close(result)
-
-			if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-				return nil
-			}
-
-			return fmt.Errorf("[readPump] read error: %v", err)
-		}
-
-		result <- string(message)
-	}
-}
-
-func heartbeat(c *websocket.Conn, done chan string) error {
-	interrupt := make(chan os.Signal, 1)
-	signal.Notify(interrupt, os.Interrupt)
-
-	ticker := time.NewTicker(time.Second * 5)
-	defer ticker.Stop()
-	for {
-		select {
-		case t := <-ticker.C:
-			err := c.WriteMessage(websocket.PingMessage, []byte(t.String()))
-			if err != nil {
-				return fmt.Errorf("[wsHeartbeat] Error writing heartbeat: %v", err)
-			}
-
-		case <-interrupt:
-			log.Println("interrupt")
-			if err := wsClose(c, done); err != nil {
-				return fmt.Errorf("[interrupt] Received error from wsClose: %v", err)
-			}
-		}
-	}
-}
-
-func wsClose(c *websocket.Conn, done chan string) error {
-	// Cleanly close the connection by sending a close message and then
-	// waiting (with timeout) for the server to close the connection
-	err := c.WriteMessage(websocket.CloseMessage, websocket.FormatCloseMessage(websocket.CloseNormalClosure, ""))
-	if err != nil {
-		if websocket.IsCloseError(err, websocket.CloseNormalClosure) {
-			log.Println("normal close")
-			return nil
-		}
-
-		return err
-	}
-
-	log.Println("waiting for done to close or timeout")
-
-	select {
-	case <-done: // wait for the read goroutine to exit
-	case <-time.After(time.Second): // or timeout after a second
-	}
-
-	log.Println("closed")
-
-	return nil
 }
