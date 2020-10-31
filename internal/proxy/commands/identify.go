@@ -24,7 +24,7 @@ func Identify(ctx *cli.Context) error {
 
 	filename := ctx.Args().Get(0)
 	endpoint := os.Getenv("LOCATOR_ENDPOINT")
-	url := fmt.Sprintf("http://%s/v1/identify", endpoint)
+	url := fmt.Sprintf("%s/v1/identify", endpoint)
 
 	// Encode the file and post it.  The server will store it in Cloud Storage
 	encoded, _ := encodeFile(filename, endpoint, url)
