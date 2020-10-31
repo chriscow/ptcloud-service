@@ -68,20 +68,27 @@ func UploadHandler(w http.ResponseWriter, r *http.Request) {
 	// 	writeError(w, 500, "Failed to publish identify job", err)
 	// 	return
 	// }
-	resp, err := http.DefaultClient.Post(os.Getenv("IDENTIFY_POINTCLOUD_TOPIC"),
-		"application/json", bytes.NewReader(msgJSON))
+	infUrl := fmt.Sprintf("%s?bucket=%s&filename=%s",
+		os.Getenv("INFERENCE_SERVICE"),
+		bucket, filename)
+
+	resp, err := http.DefaultClient.Get(infUrl)
 
 	if err != nil {
 		writeError(w, 500, "Failed to post to cloud run", err)
+		return
+	}
+
+	b, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		writeError(w, 500, "Failed to read body", err)
+		return
 	}
 
 	if resp.StatusCode != 200 {
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			panic(err)
-		}
-		writeError(w, resp.StatusCode, string(body), nil)
+		writeError(w, resp.StatusCode, string(b), nil)
 	}
 
-	fmt.Fprint(w, "OK")
+	w.Header().Add("Content-Type", "application/json")
+	w.Write(b)
 }

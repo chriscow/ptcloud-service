@@ -11,7 +11,6 @@ import (
 	"os"
 
 	"github.com/chriscow/strucim/internal/messages"
-	"github.com/chriscow/strucim/internal/services/notification"
 
 	"github.com/urfave/cli/v2"
 )
@@ -27,14 +26,7 @@ func Identify(ctx *cli.Context) error {
 	endpoint := os.Getenv("LOCATOR_ENDPOINT")
 	url := fmt.Sprintf("http://%s/v1/identify", endpoint)
 
-	nc := &notification.Client{}
-	if err := nc.Connect(endpoint, "/v1/identify", "identify-status"); err != nil {
-		return err
-	}
-	defer nc.Close()
-
-	nc.Subscribe(os.Getenv("IDENTIFY_POINTCLOUD_STATUS_TOPIC"))
-
+	// Encode the file and post it.  The server will store it in Cloud Storage
 	encoded, _ := encodeFile(filename, endpoint, url)
 
 	req, err := json.Marshal(&messages.IdentifyRequest{File: encoded})
@@ -47,19 +39,14 @@ func Identify(ctx *cli.Context) error {
 		return err
 	}
 
+	pred, _ := ioutil.ReadAll(resp.Body)
+
 	if resp.StatusCode != 200 {
-		body, _ := ioutil.ReadAll(resp.Body)
-		return fmt.Errorf("Server return an error: %s", string(body))
+		return fmt.Errorf("Server return an error: %s", string(pred))
 	}
 
-	log.Printf("[Identify] waiting for result channel")
-	msg, ok := <-nc.Messages
-	if !ok {
-		// channel got closed
-		log.Fatal("[Identify] result channel got closed")
-	}
+	log.Println("Received message:", string(pred))
 
-	fmt.Println(string(msg))
 	return nil
 }
 
