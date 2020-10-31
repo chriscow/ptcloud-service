@@ -1,24 +1,42 @@
 steps:
-# extract the service account secrets
-- name: gcr.io/cloud-builders/gcloud
-    entrypoint: 'bash'
-    dir: 'strucim-cloud/server/.secrets'
-    args: [ '-c', "gcloud secrets versions access latest --secret=strucim-gateway-keys --format='get(payload.data)' | tr '_-' '/+' | base64 -d > .secrets/strucim-gateway-keys.json" ]
+# Extract the service account secrets
+# - name: gcr.io/cloud-builders/gcloud
+#   entrypoint: 'bash'
+#   dir: 'strucim/cmd/gateway/'
+#   args: [ '-c', "gcloud secrets versions access latest --secret=strucim-gateway-keys --format='get(payload.data)' | tr '_-' '/+' | base64 -d > .secrets/strucim-gateway-keys.json" ]
 
 # test the project
-- name: golang
-    args: ['go', 'test']
-    env: 
-        - 'GOOS="linux"'
-        - 'GOARCH="amd64"'
+# - name: golang
+#   args: ['go', 'test']
+#   env: 
+#       - 'GOOS="linux"'
+#       - 'GOARCH="amd64"'
 
-# build the binaries
-- name: golang
-    args: ['go', 'build, '.']
-    env: 
-        - 'GOOS="linux"'
-        - 'GOARCH="amd64"'
+- name: gcr.io/cloud-builders/gcloud
+  entrypoint: 'bash'
+  dir: 'strucim'
+  args: [ '-c', 'ls -lha']
 
-# build the docker image
+# Build the binaries
+- name: golang
+  dir: 'strucim'
+  args: ['go', 'build', './cmd/gateway/.']
+  # env: 
+  #     - 'GOOS="linux"'
+  #     - 'GOARCH="amd64"'
+
+# Build the docker image
 - name: 'gcr.io/cloud-builders/docker'
-  args: [ 'build', '-t', 'gcr.io/strucim/strucim/gateway', '.' ]
+  args: [ 'build', '-t', 'gcr.io/strucim/gateway', '.' ]
+
+# Push the container image to Container Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'gcr.io/strucim/gateway']
+
+# Deploy container image to Cloud Run
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args: ['run', 'deploy', 'strucim-gateway', '--image', 'gcr.io/strucim/gateway', '--region', 'us-central1', '--platform', 'managed']
+timeout: 1200s
+images:
+- gcr.io/strucim/gateway

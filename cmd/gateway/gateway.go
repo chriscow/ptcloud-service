@@ -1,7 +1,6 @@
 package main
 
 import (
-	"errors"
 	"log"
 	"net/http"
 	"os"
@@ -12,18 +11,6 @@ import (
 	"github.com/gorilla/mux"
 	"github.com/joho/godotenv"
 )
-
-/*
-	TODO:
-	File upload service
-	Inference service
-	Notification service
-*/
-
-type dashboard struct {
-	Title string
-	Host  string
-}
 
 func main() {
 	godotenv.Load()
@@ -47,27 +34,37 @@ func main() {
 	log.Fatal(http.ListenAndServe(os.Getenv("GATEWAY_ENDPOINT"), r))
 }
 
+// Check for environment variable values.  Set defaults if they aren't set
 func verifyEnvironment() error {
+
+	if os.Getenv("GCP_CREDENTIALS_PATH") == "" {
+		// set default
+		os.Setenv("GCP_CREDENTIALS_PATH", "./.secrets/strucim-gateway-keys.json")
+	}
+
 	_, err := os.Stat(os.Getenv("GCP_CREDENTIALS_PATH"))
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Println("Google file not found")
+			log.Println("Google credentials file not found")
 		}
-
 		return err
 	}
 
+	if os.Getenv("GATEWAY_ENDPOINT") == "" {
+		os.Setenv("GATEWAY_ENDPOINT", ":8080")
+	}
+
 	if os.Getenv("IDENTIFY_BUCKET") == "" {
-		return errors.New("IDENTIFY_BUCKET is not defined")
+		os.Setenv("IDENTIFY_BUCKET", "pointcloud-identification")
 	}
 
 	if os.Getenv("IDENTIFY_POINTCLOUD_TOPIC") == "" {
-		return errors.New("IDENTIFY_POINTCLOUD_TOPIC is not defined")
+		os.Setenv("IDENTIFY_POINTCLOUD_TOPIC", "identify-request")
 	}
 
 	if os.Getenv("IDENTIFY_POINTCLOUD_STATUS_TOPIC") == "" {
-		return errors.New("IDENTIFY_POINTCLOUD_STATUS_TOPIC is not defined")
+		os.Setenv("IDENTIFY_POINTCLOUD_STATUS_TOPIC", "identify-status")
 	}
 
-	return err
+	return nil
 }
